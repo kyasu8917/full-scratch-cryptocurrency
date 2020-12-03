@@ -32,6 +32,10 @@ class Server {
     MESSAGE_CORE_LIST = 3
     MESSAGE_REMOVE_AS_CORE = 4
 
+    MESSAGE_CHAT = 98
+    MESSAGE_CHAT_BROADCAST = 99
+    MESSAGE_CHAT_TO_EDGE = 100
+
     constructor(port, firstAccessPort) {
         this.id = uuid.v4();
 
@@ -66,12 +70,12 @@ class Server {
         switch (message['type']) {
             case this.MESSAGE_ADD_AS_EDGE:
                 let address = socket.address();
-                this.addAsEdge(this.id, address['port'], address['family'], address['address'])
+                this.addAsEdge(message['payload']['id'], message['payload']['port'], message['payload']['address']);
                 console.log(this.edgeList);
                 socket.write(JSON.stringify({'id': message['id'], 'type': this.MESSAGE_CORE_LIST, 'payload': this.makeDictionaryFromCoreList()}));
                 break;
             case this.MESSAGE_JOIN_NETWORK:
-                this.addAsCore(message['payload']['id'], message['payload']['port'], message['payload']['family'], message['payload']['address'])
+                this.addAsCore(message['payload']['id'], message['payload']['port'], message['payload']['family'], message['payload']['address']);
                 console.log('a core joined this network! welcome');
                 console.log(this.coreList);
                 socket.write(JSON.stringify({'id': message['id'], 'type': this.MESSAGE_CORE_LIST, 'payload': this.makeDictionaryFromCoreList()}));
@@ -90,12 +94,36 @@ class Server {
             case this.MESSAGE_REMOVE_AS_CORE:
                 console.log('notified a core remove!')
                 this.removeCore(message['payload']['id']);
+            case this.MESSAGE_CHAT:
+                console.log('get chat message!');
+                this.broadcastChat(message['payload']);
+            case this.MESSAGE_CHAT_BROADCAST:
+                console.log('get broadcast chat message!');
+                this.sendChatToEdge(message['payload']);
         }
     }
 
-    addAsEdge(id, port, family, address) {
-        let edge = new Edge(id, port, family, address);
+    addAsEdge(id, port, address) {
+        let edge = new Edge(id, port, address);
         this.edgeList.push(edge);
+    }
+
+    broadcastChat(payload) {
+        this.coreList.forEach(core => {
+            let conn = net.connect(core.port, core.address, () => {
+                console.log('broadcast chat');
+                conn.write(JSON.stringify({'type': this.MESSAGE_CHAT_BROADCAST, 'id': uuid.v4(),'payload': payload}));
+            });
+        })
+    }
+
+    sendChatToEdge(payload) {
+        this.edgeList.forEach(edge => {
+            let conn = net.connect(edge.port, edge.address, () => {
+                console.log('send chat to edge');
+                conn.write(JSON.stringify({'type': this.MESSAGE_CHAT_TO_EDGE, 'id': uuid.v4(),'payload': payload}));
+            });
+        })
     }
 
     addAsCore(id, port, family, address) {
