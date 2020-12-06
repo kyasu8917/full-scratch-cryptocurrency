@@ -3,7 +3,7 @@
 const net = require('net');
 const uuid = require('uuid');
 
-const port = 3001;
+const port = process.argv[2];
 const address = "127.0.0.1";
 
 class Core {
@@ -49,7 +49,6 @@ client.on('close', () => {
 });
 
 sendMessage();
-
 
 
 function sendMessage() {
